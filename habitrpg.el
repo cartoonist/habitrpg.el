@@ -144,6 +144,21 @@
   "API Inventory Path"
   :group 'habitrpg)
 
+(defcustom habitrpg-api-client "habitrpg"
+  "API client name used in the X-Client header."
+  :group 'habitrpg
+  :type 'string)
+
+(defun habitrpg-headers (&optional extra-headers)
+  "Generate the HTTP headers required for Habitica API v3 requests.
+Includes X-API-User, X-API-Key, and X-Client. EXTRA-HEADERS
+will be prepended to the list."
+  (append
+   extra-headers
+   `(("X-API-User" . ,(or habitrpg-api-user ""))
+     ("X-API-Key" . ,(or habitrpg-api-token ""))
+     ("X-Client" . ,(concat (or habitrpg-api-user "") "-" habitrpg-api-client)))))
+
 (cl-eval-when (load eval)
   (defalias 'habitrpg-set-variable-and-refresh 'set-default))
 
@@ -371,9 +386,7 @@ The function is given one argument, the status buffer."
        (concat habitrpg-api-url habitrpg-api-user-path)
        :type "GET"
        :parser 'json-read
-       :headers `(("Accept" . "application/json")
-		  ("X-API-User" . ,habitrpg-api-user)
-		  ("X-API-Key" . ,habitrpg-api-token))
+       :headers (habitrpg-headers '(("Accept" . "application/json")))
        :sync t
        :success (function*
 		 (lambda (&key data &allow-other-keys)
@@ -1121,9 +1134,7 @@ TITLE is the displayed title of the section."
 		    (concat habitrpg-api-url habitrpg-api-usertask-path)
 		    :type "GET"
 		    :parser 'json-read
-		    :headers `(("Accept" . "application/json")
-			       ("X-API-User" . ,habitrpg-api-user)
-			       ("X-API-Key" . ,habitrpg-api-token))
+		    :headers (habitrpg-headers '(("Accept" . "application/json")))
 		    :sync t
 		    :success (function*
 			      (lambda (&key data &allow-other-keys)
@@ -1177,9 +1188,7 @@ TITLE is the displayed title of the section."
 		    (concat habitrpg-api-url habitrpg-api-user-path)
 		    :type "GET"
 		    :parser 'json-read
-		    :headers `(("Accept" . "application/json")
-			       ("X-API-User" . ,habitrpg-api-user)
-			       ("X-API-Key" . ,habitrpg-api-token))
+		    :headers (habitrpg-headers '(("Accept" . "application/json")))
 		    :sync t
 		    :success (function*
 			      (lambda (&key data &allow-other-keys)
@@ -1209,9 +1218,7 @@ TITLE is the displayed title of the section."
   		    (concat habitrpg-api-url habitrpg-api-inventory-path "/buy")
   		    :type "GET"
   		    :parser 'json-read
-  		    :headers `(("Accept" . "application/json")
-  			       ("X-API-User" . ,habitrpg-api-user)
-  			       ("X-API-Key" . ,habitrpg-api-token))
+  		    :headers (habitrpg-headers '(("Accept" . "application/json")))
   		    :sync t
   		    :success (function*
   			      (lambda (&key data &allow-other-keys)
@@ -1490,9 +1497,7 @@ there.  If its state is DONE, update."
   (request
    (concat habitrpg-api-url habitrpg-api-usertask-path "/")
    :type "POST"
-   :headers `(("Accept" . "application/json")
-	      ("X-API-User" . ,habitrpg-api-user)
-	      ("X-API-Key" . ,habitrpg-api-token))
+   :headers (habitrpg-headers '(("Accept" . "application/json")))
    :data `(("type" . ,type)
 	   ("text" . ,task)
 	   ("notes" . ,text)
@@ -1522,10 +1527,8 @@ there.  If its state is DONE, update."
     (request-deferred
      (concat habitrpg-api-url habitrpg-api-user-path "/revive")
      :type "POST"
-     :headers `(("Content-Type" . "application/json")
-		("Content-Length" . 0)
-		("X-API-User" . ,habitrpg-api-user)
-		("X-API-Key" . ,habitrpg-api-token))
+     :headers (habitrpg-headers '(("Content-Type" . "application/json")
+				  ("Content-Length" . 0)))
      :parser 'json-read
      :error  (function* (lambda (&key error-thrown &allow-other-keys&rest _)
 			  (message "HabitRPG: Error in getting id for task [%s]" t))))
@@ -1540,9 +1543,7 @@ there.  If its state is DONE, update."
     (deferred:$
       (request-deferred
        (concat habitrpg-api-url habitrpg-api-usertask-path)
-       :headers `(("Accept" . "application/json")
-		  ("X-API-User" . ,habitrpg-api-user)
-		  ("X-API-Key" . ,habitrpg-api-token))
+       :headers (habitrpg-headers '(("Accept" . "application/json")))
        :parser 'json-read
        :error  (function* (lambda (&key error-thrown &allow-other-keys&rest _)
 			    (message "HabitRPG: Error in getting id for task [%s]" ts))))
@@ -1596,10 +1597,8 @@ there.  If its state is DONE, update."
        (concat habitrpg-api-url habitrpg-api-tasks-path "/" id "/score/"
 	       (unless direction "up") direction))
      :type "POST"
-     :headers `(("Content-Type" . "application/json")
-		("Content-Length" . 0)
-		("X-API-User" . ,habitrpg-api-user)
-		("X-API-Key" . ,habitrpg-api-token))
+     :headers (habitrpg-headers '(("Content-Type" . "application/json")
+				  ("Content-Length" . 0)))
      :parser 'json-read
      :success (function* (lambda (&key data &allow-other-keys)
 			   (if hrpg-status-to-file
@@ -1734,9 +1733,7 @@ there.  If its state is DONE, update."
 	(request
 	 (concat habitrpg-api-url habitrpg-api-tasks-path "/" id)
 	 :type "DELETE"
-	 :headers `(("Content-Type" . "application/json")
-		    ("X-API-User" . ,habitrpg-api-user)
-		    ("X-API-Key" . ,habitrpg-api-token))
+	 :headers (habitrpg-headers '(("Content-Type" . "application/json")))
 	 :parser 'json-read
 	 :complete (function*
 		    (lambda (&key data &allow-other-keys)
