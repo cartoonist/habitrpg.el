@@ -101,6 +101,7 @@
 
 
 (require 'cl)
+(require 'cl-lib)
 (require 'json)
 (unless (require 'deferred nil t)
   (load-file "deferred.el"))
@@ -382,86 +383,89 @@ The function is given one argument, the status buffer."
   (setq header-line-format habitrpg-header-line-string)
   (habitrpg-create-buffer-sections
     (habitrpg-with-section 'status nil
-      (request
-       (concat habitrpg-api-url habitrpg-api-user-path)
-       :type "GET"
-       :parser 'json-read
-       :headers (habitrpg-headers '(("Accept" . "application/json")))
-       :sync t
-       :success (function*
-		 (lambda (&key data &allow-other-keys)
-		   (let* ((data (assoc-default 'data data))
-			  (stats (assoc-default 'stats data))
-			  ;; stats
-			  (exp (assoc-default 'exp stats))
-			  (gp (assoc-default 'gp stats))
-			  (hp (assoc-default 'hp stats))
-			  (maxhp (assoc-default 'maxHealth stats))
-			  (lvl (assoc-default 'lvl stats))
-			  (nextlvl (assoc-default 'toNextLevel stats))
-			  ;; auth info
-			  (auth (assoc-default 'auth data))
-			  (local (assoc-default 'local auth))
-			  (facebook (assoc-default 'facebook auth))
-			  (timestamps (assoc-default 'timestamps auth))
-			  (user (cond
-				 ((assoc-default 'username local))
-				 ((assoc-default 'username facebook))))
-			  (born (assoc-default 'created timestamps))
-			  (uid (assoc-default 'id data))
-			  ;; flags - for inn
-			  (flags (assoc-default 'flags data))
-			  (rest (assoc-default 'rest flags))
-			  ;; pref
-			  (pref (assoc-default 'preferences data))
-			  (day (assoc-default 'dayStart pref)))
-		     (habitrpg-with-section 'stats 'stats
-		       (habitrpg-set-section-info `(("gp" . ,(floor gp))))
-		       (habitrpg-insert-status-line
-			(propertize user 'face 'habitrpg-user)
-			(concat (if (eq rest t)
-				    (propertize "Resting" 'face 'font-lock-warning-face)
-				  "")
-				(propertize
-				 (format " New day starts at %s:00"
-					 (if (stringp day)
-					     (if (eq (string-width day) 1)
-						 (concat "0" day)
-					       day)
-					   (number-to-string day)))
-				 'face 'habitrpg-day)))
+        (request
+         (concat habitrpg-api-url habitrpg-api-user-path)
+         :type "GET"
+         :parser 'json-read
+         :headers (habitrpg-headers '(("Accept" . "application/json")))
+         :sync t
+         :success (function*
+		   (lambda (&key data &allow-other-keys)
+		     (with-current-buffer (or (habitrpg-find-status-buffer 'habitrpg-status-mode)
+					      (get-buffer "*habitrpg:status*")
+					      (current-buffer))
+		       (let* ((data (assoc-default 'data data))
+			      (stats (assoc-default 'stats data))
+			      ;; stats
+			      (exp (assoc-default 'exp stats))
+			      (gp (assoc-default 'gp stats))
+			      (hp (assoc-default 'hp stats))
+			      (maxhp (assoc-default 'maxHealth stats))
+			      (lvl (assoc-default 'lvl stats))
+			      (nextlvl (assoc-default 'toNextLevel stats))
+			      ;; auth info
+			      (auth (assoc-default 'auth data))
+			      (local (assoc-default 'local auth))
+			      (facebook (assoc-default 'facebook auth))
+			      (timestamps (assoc-default 'timestamps auth))
+			      (user (cond
+				     ((assoc-default 'username local))
+				     ((assoc-default 'username facebook))))
+			      (born (assoc-default 'created timestamps))
+			      (uid (assoc-default 'id data))
+			      ;; flags - for inn
+			      (flags (assoc-default 'flags data))
+			      (rest (assoc-default 'rest flags))
+			      ;; pref
+			      (pref (assoc-default 'preferences data))
+			      (day (assoc-default 'dayStart pref)))
+			 (habitrpg-with-section 'stats 'stats
+			   (habitrpg-set-section-info `(("gp" . ,(floor gp))))
+			   (habitrpg-insert-status-line
+			    (propertize user 'face 'habitrpg-user)
+			    (concat (if (eq rest t)
+					(propertize "Resting" 'face 'font-lock-warning-face)
+				      "")
+				    (propertize
+				     (format " New day starts at %s:00"
+					     (if (stringp day)
+						 (if (eq (string-width day) 1)
+						     (concat "0" day)
+						   day)
+					       (number-to-string day)))
+				     'face 'habitrpg-day)))
 
-		       (habitrpg-insert-status-line (concat "Experience: "
-							    (propertize
-							     (number-to-string (floor exp))
-							     'face 'habitrpg-exp))
-						    (propertize (number-to-string nextlvl) 'face 'habitrpg-nextlvl))
-		       (habitrpg-insert-status-line (concat "Gold: "
-							    (propertize (number-to-string (floor gp))
-									'face 'habitrpg-gold)) "")
-		       (habitrpg-insert-status-line (concat "Health: "
-							    (propertize (number-to-string (floor hp))
-									'face 'habitrpg-hp))
-						    (propertize (number-to-string maxhp) 'face 'habitrpg-maxhp))
-		       (habitrpg-insert-status-line (concat "Level: "
-							    (propertize
-							     (number-to-string (floor lvl))
-							     'face 'habitrpg-lvl)) "\n")
-		       (let ((habitrpg-section-hidden-default t))
-			 (habitrpg-with-section uid 'auth
-			   (insert (propertize "[UID]\n" 'face 'font-lock-comment-face))
-			   (insert (propertize (concat uid "\n") 'face 'font-lock-keyword-face)))))))))
-      (insert "\n")
-      (habitrpg-insert-tasks)
-      (habitrpg-insert-habits)
-      (habitrpg-insert-dailys)
-      (habitrpg-insert-rewards)
-      (habitrpg-insert-inventory t)
-      (habitrpg-insert-eggs)
-      (habitrpg-insert-potions)
-      (habitrpg-insert-pets)
-      (habitrpg-insert-store t)
-      (kill-buffer "*request*"))))
+			   (habitrpg-insert-status-line (concat "Experience: "
+								(propertize
+								 (number-to-string (floor exp))
+								 'face 'habitrpg-exp))
+							(propertize (number-to-string nextlvl) 'face 'habitrpg-nextlvl))
+			   (habitrpg-insert-status-line (concat "Gold: "
+								(propertize (number-to-string (floor gp))
+									    'face 'habitrpg-gold)) "")
+			   (habitrpg-insert-status-line (concat "Health: "
+								(propertize (number-to-string (floor hp))
+									    'face 'habitrpg-hp))
+							(propertize (number-to-string maxhp) 'face 'habitrpg-maxhp))
+			   (habitrpg-insert-status-line (concat "Level: "
+								(propertize
+								 (number-to-string (floor lvl))
+								 'face 'habitrpg-lvl)) "\n")
+			   (let ((habitrpg-section-hidden-default t))
+			     (habitrpg-with-section uid 'auth
+			       (insert (propertize "[UID]\n" 'face 'font-lock-comment-face))
+			       (insert (propertize (concat uid "\n") 'face 'font-lock-keyword-face))))))))))
+        (insert "\n")
+        (habitrpg-insert-tasks)
+        (habitrpg-insert-habits)
+        (habitrpg-insert-dailys)
+        (habitrpg-insert-rewards)
+        (habitrpg-insert-inventory t)
+        (habitrpg-insert-eggs)
+        (habitrpg-insert-potions)
+        (habitrpg-insert-pets)
+        (habitrpg-insert-store t)
+        (kill-buffer "*request*"))))
 
 (defun habitrpg-mode ()
   "Review the status of your habitrpg characters.
