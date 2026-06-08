@@ -306,6 +306,50 @@ This is an alist where each element is of the
   "List of IDs that need to be upvoted.")
 (defvar hrpg-to-add nil
   "List of tasks that need to be added.")
+
+(cl-defstruct habitrpg-section
+  parent title beginning end children hidden type info
+  needs-refresh-on-show)
+
+;;; Macros
+
+(defmacro habitrpg-with-section (title type &rest body)
+  "Create a new section of title TITLE and type TYPE and evaluate BODY there.
+
+Sections created inside BODY will become children of the new
+section. BODY must leave point at the end of the created section.
+
+If TYPE is nil, the section won't be highlighted."
+  (declare (indent 2))
+  (let ((s (make-symbol "*section*")))
+    `(let* ((,s (habitrpg-new-section ,title ,type))
+            (habitrpg-top-section ,s))
+       (setf (habitrpg-section-beginning ,s) (point))
+       ,@body
+       (setf (habitrpg-section-end ,s) (point))
+       (setf (habitrpg-section-children ,s)
+             (nreverse (habitrpg-section-children ,s)))
+       ,s)))
+
+(defmacro habitrpg-create-buffer-sections (&rest body)
+  "Empty current buffer of text and habitrpg's sections, and then evaluate BODY."
+  (declare (indent 0))
+  `(let ((inhibit-read-only t))
+     (erase-buffer)
+     (let ((habitrpg-old-top-section habitrpg-top-section))
+       (setq habitrpg-top-section nil)
+       ,@body
+       (when (null habitrpg-top-section)
+         (habitrpg-with-section 'top nil
+           (insert "(empty)\n")))
+       (habitrpg-propertize-section habitrpg-top-section)
+       (habitrpg-section-set-hidden habitrpg-top-section
+				    (habitrpg-section-hidden habitrpg-top-section)))))
+
+(defmacro habitrpg-with-refresh (&rest body)
+  (declare (indent 0))
+  `(habitrpg-refresh-wrapper (lambda () ,@body)))
+
 (defvar habitrpg-refresh-function nil)
 (make-variable-buffer-local 'habitrpg-refresh-function)
 (put 'habitrpg-refresh-function 'permanent-local t)
@@ -535,10 +579,6 @@ The function is given one argument, the status buffer."
 ;; represents (if any), and the parent and grand-parent, etc provide
 ;; the context.
 
-(cl-defstruct habitrpg-section
-  parent title beginning end children hidden type info
-  needs-refresh-on-show)
-
 (defvar habitrpg-top-section nil
   "The top section of the current buffer.")
 (make-variable-buffer-local 'habitrpg-top-section)
@@ -576,24 +616,6 @@ The function is given one argument, the status buffer."
 
 (defun habitrpg-set-section-info (info &optional section)
   (setf (habitrpg-section-info (or section habitrpg-top-section)) info))
-
-(defmacro habitrpg-with-section (title type &rest body)
-  "Create a new section of title TITLE and type TYPE and evaluate BODY there.
-
-Sections created inside BODY will become children of the new
-section. BODY must leave point at the end of the created section.
-
-If TYPE is nil, the section won't be highlighted."
-  (declare (indent 2))
-  (let ((s (make-symbol "*section*")))
-    `(let* ((,s (habitrpg-new-section ,title ,type))
-            (habitrpg-top-section ,s))
-       (setf (habitrpg-section-beginning ,s) (point))
-       ,@body
-       (setf (habitrpg-section-end ,s) (point))
-       (setf (habitrpg-section-children ,s)
-             (nreverse (habitrpg-section-children ,s)))
-       ,s)))
 
 (defun habitrpg-set-section-needs-refresh-on-show (flag &optional section)
   (setf (habitrpg-section-needs-refresh-on-show
@@ -687,21 +709,6 @@ See `habitrpg-insert-section' for meaning of the arguments"
 	 habitrpg-api-url
 	 new-request-p
          (append args)))
-
-(defmacro habitrpg-create-buffer-sections (&rest body)
-  "Empty current buffer of text and habitrpg's sections, and then evaluate BODY."
-  (declare (indent 0))
-  `(let ((inhibit-read-only t))
-     (erase-buffer)
-     (let ((habitrpg-old-top-section habitrpg-top-section))
-       (setq habitrpg-top-section nil)
-       ,@body
-       (when (null habitrpg-top-section)
-         (habitrpg-with-section 'top nil
-           (insert "(empty)\n")))
-       (habitrpg-propertize-section habitrpg-top-section)
-       (habitrpg-section-set-hidden habitrpg-top-section
-				    (habitrpg-section-hidden habitrpg-top-section)))))
 
 (defun habitrpg-find-section (path top)
   "Find the section at the path PATH in subsection of section TOP."
@@ -1076,10 +1083,6 @@ buffer's mode doesn't derive from `habitrpg-mode' do nothing."
   (habitrpg-for-all-buffers #'habitrpg-refresh-buffer default-directory))
 
 ;;; Macros
-
-(defmacro habitrpg-with-refresh (&rest body)
-  (declare (indent 0))
-  `(habitrpg-refresh-wrapper (lambda () ,@body)))
 
 (defmacro habitrpg-define-level-shower-1 (level all)
   "Define an interactive function to show function of level LEVEL.
