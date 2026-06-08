@@ -117,5 +117,20 @@
       (when (buffer-live-p other-buf) (kill-buffer other-buf))
       (when (buffer-live-p request-buf) (kill-buffer request-buf)))))
 
+(ert-deftest test-habitrpg-get-id-error ()
+  "Test habitrpg-get-id to reproduce 'it' void variable error."
+  (let ((mock-tasks-data '((data . [((completed . :json-false)
+                                     (type . "todo")
+                                     (text . "test-task")
+                                     (id . "todo-1"))]))))
+    (cl-letf* (((symbol-function 'request)
+                (lambda (url &rest plist)
+                  (let ((complete-cb (plist-get plist :complete))
+                        (mock-response (make-request-response :data mock-tasks-data)))
+                    (funcall complete-cb :response mock-response)))))
+      (should (progn
+                (habitrpg-get-id "test-task" (lambda (id) (message "Id: %s" id)))
+                t)))))
+
 (provide 'test-habitrpg)
 ;;; test-habitrpg.el ends here

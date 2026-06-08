@@ -1,4 +1,4 @@
-;;; habitrpg.el --- org-mode interface to habitrpg
+;;; habitrpg.el --- org-mode interface to habitrpg  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2013
 
@@ -1261,6 +1261,7 @@ TITLE is the displayed title of the section."
  		    "Stable:" 'habitrpg-wash-tasks nil))
 
 (defvar habitrpg-indentation-level 1)
+(defvar section-title nil "Dynamic variable holding the current section title.")
 
 (defun habitrpg-wash-tasks ()
   (habitrpg-wash-sequence #'habitrpg-wash-task))
@@ -1407,7 +1408,7 @@ With a prefix argument, kill the buffer instead."
 (defun habitrpg-setup ()
   (save-excursion (save-window-excursion
 		    (if (string= major-mode 'org-agenda-mode) (org-agenda-switch-to))
-		    (lexical-let* ((in-habit (org-entry-get-with-inheritance "IN_HABITRPG")))
+		    (let* ((in-habit (org-entry-get-with-inheritance "IN_HABITRPG")))
 		      (cond
 		       ((string= in-habit "unknown")
 			(habitrpg-add))
@@ -1443,25 +1444,25 @@ there.  If its state is DONE, update."
   (habitrpg-do-backlog)
   (save-excursion (save-window-excursion
 		    (if (string= major-mode 'org-agenda-mode) (org-agenda-switch-to))
-		    (lexical-let* ((task (nth 4 (org-heading-components)))
-				   (state (nth 2 (org-heading-components)))
-				   (in-habit (org-entry-get-with-inheritance "IN_HABITRPG"))
-				   (last-done-string (if (org-is-habit-p (point))
-							 (car (sort 
-							       (org-habit-done-dates
-								(org-habit-parse-todo))
-							       '>)))
-						     nil)
-				   (last-done-day 
-				    (if (and (member "hrpgdaily" (org-get-tags-at))
-					     last-done-string)
-					(butlast
-					 (nthcdr 3
-						 (decode-time 
-						  (days-to-time last-done-string
-								))) 4)
-				      nil))
-				   type)
+		    (let* ((task (nth 4 (org-heading-components)))
+			   (state (nth 2 (org-heading-components)))
+			   (in-habit (org-entry-get-with-inheritance "IN_HABITRPG"))
+			   (last-done-string (if (org-is-habit-p (point))
+						 (car (sort
+						       (org-habit-done-dates
+							(org-habit-parse-todo))
+						       '>))
+					       nil))
+			   (last-done-day
+			    (if (and (member "hrpgdaily" (org-get-tags-at))
+				     last-done-string)
+				(butlast
+				 (nthcdr 3
+					 (decode-time
+					  (days-to-time last-done-string
+							))) 4)
+			      nil))
+			   type)
 
 		      (habitrpg-get-id task
 				       (lambda (id)
@@ -1515,11 +1516,11 @@ there.  If its state is DONE, update."
 	       (message "Task created.")))))
 
 (defun habitrpg-new-task (&optional type)
-  (lexical-let* ((type (or type "todo"))
-		 (task (read-from-minibuffer "Task Name: "))
-		 (notes (read-from-minibuffer "Notes: "))
-		 (value (when (string= type "reward") (read-from-minibuffer "Cost: ")))
-		 (p (point)))
+  (let* ((type (or type "todo"))
+	 (task (read-from-minibuffer "Task Name: "))
+	 (notes (read-from-minibuffer "Notes: "))
+	 (value (when (string= type "reward") (read-from-minibuffer "Cost: ")))
+	 (p (point)))
     (if (string= type 'reward)
 	(habitrpg-create type task notes value)
       (habitrpg-create type task notes)
@@ -1537,29 +1538,29 @@ there.  If its state is DONE, update."
      :headers (habitrpg-headers '(("Content-Type" . "application/json")
 				  ("Content-Length" . 0)))
      :parser 'json-read
-     :error  (function* (lambda (&key error-thrown &allow-other-keys&rest _)
-			  (message "HabitRPG: Error in getting id for task [%s]" t))))
+     :error  (cl-function (lambda (&key error-thrown &allow-other-keys)
+			    (message "HabitRPG: Error in getting id for task [%s]" t))))
     (deferred:nextc it
-      `(lambda (response)
+      (lambda (response)
 	(if (request-response-error-thrown response)
 	    (progn
 	      (message "HabitRPG: Error reviving")))))))
 
 (defun habitrpg-get-id (task func)
-  (lexical-let ((ts task) (func func))
+  (let ((ts task) (func func))
     (deferred:$
       (request-deferred
        (concat habitrpg-api-url habitrpg-api-usertask-path)
        :headers (habitrpg-headers '(("Accept" . "application/json")))
        :parser 'json-read
-       :error  (function* (lambda (&key error-thrown &allow-other-keys&rest _)
-			    (message "HabitRPG: Error in getting id for task [%s]" ts))))
+       :error  (cl-function (lambda (&key error-thrown &allow-other-keys)
+			      (message "HabitRPG: Error in getting id for task [%s]" ts))))
       (deferred:nextc it
-	`(lambda (response)
+	(lambda (response)
 	  (if (request-response-error-thrown response)
 	      (progn
-		(message "HabitRPG: Error in getting id for task [%s]" ,ts)
-		(setq hrpg-to-add (cl-adjoin ,ts hrpg-to-add)))
+		(message "HabitRPG: Error in getting id for task [%s]" ts)
+		(setq hrpg-to-add (cl-adjoin ts hrpg-to-add)))
 	    (let* ((data (assoc-default 'data (request-response-data response)))
 		   (tasks (append data nil))
 		   (names (mapcar
@@ -1575,7 +1576,7 @@ there.  If its state is DONE, update."
 					(assoc-default 'type task-id) "habit"))
 				      (string= (assoc-default
 						'text task-id)
-					       ,ts))
+					       ts))
 				 (list (assoc-default 'text task-id) (assoc-default 'id task-id))))) tasks))
 		   ;; Completed tasks should not be upvoted, so
 		   ;; we should gather a list of those tasks and
@@ -1586,47 +1587,47 @@ there.  If its state is DONE, update."
 			    (lambda (task-id)
 			      (let* ((name (assoc-default 'text task-id)))
 				(when (not (assoc-default name names))
-				  (list name (car task-id))))) tasks)))
-	      (if (assoc-default ,ts cnames)
+				  (list name (car task-id))))) tasks))
+		   id)
+	      (if (assoc-default ts cnames)
 		  (progn
 		    (setq id "completed")
-		    (message "Task %S has already been done!" ,ts))
-		(setq id (car (assoc-default ,ts names)))
-		(message "Got id %S for task %S" id ,ts))
-	      (funcall ,func id))))))))
+		    (message "Task %S has already been done!" ts))
+		(setq id (car (assoc-default ts names)))
+		(message "Got id %S for task %S" id ts))
+	      (funcall func id))))))))
 
 
 (defun habitrpg-upvote (id &optional task type text direction)
-  (lexical-let ((direction direction) (task task) (type type))
-    (request
-     (if (string= type "store")
-	 (concat habitrpg-api-url habitrpg-api-inventory-path "/buy/" id "/")
-       (concat habitrpg-api-url habitrpg-api-tasks-path "/" id "/score/"
-	       (unless direction "up") direction))
-     :type "POST"
-     :headers (habitrpg-headers '(("Content-Type" . "application/json")
-				  ("Content-Length" . 0)))
-     :parser 'json-read
-     :success (function* (lambda (&key data &allow-other-keys)
-			   (if hrpg-status-to-file
-			       (with-temp-file "~/tmp/hrpg-status"
-				 (let* ((exp (assoc-default 'exp data))
-					(gp (assoc-default 'gp data))
-					(hp (assoc-default 'hp data))
-					(lvl (assoc-default 'lvl data)))
-				   (insert (concat "exp: " (number-to-string (truncate exp))
-						   " gp: " (number-to-string (truncate gp))
-						   " hp: " (number-to-string (truncate hp))
-						   " lvl: " (number-to-string (truncate lvl)))))))
-			   (cond ((or (string= type "reward") (string= type "store"))
-				  (message "Purchased %s" id))
-				 ((string= direction "down")
-				  (message "Health lost for habit %s" task))
-				 ((not (string= direction "up"))
-				  (message "Experience gained!")))))
-     :error (function* (lambda (&key error-thrown &allow-other-keys&rest _)
+  (request
+   (if (string= type "store")
+       (concat habitrpg-api-url habitrpg-api-inventory-path "/buy/" id "/")
+     (concat habitrpg-api-url habitrpg-api-tasks-path "/" id "/score/"
+	     (unless direction "up") direction))
+   :type "POST"
+   :headers (habitrpg-headers '(("Content-Type" . "application/json")
+				("Content-Length" . 0)))
+   :parser 'json-read
+   :success (function* (lambda (&key data &allow-other-keys)
+			 (if hrpg-status-to-file
+			     (with-temp-file "~/tmp/hrpg-status"
+			       (let* ((exp (assoc-default 'exp data))
+				      (gp (assoc-default 'gp data))
+				      (hp (assoc-default 'hp data))
+				      (lvl (assoc-default 'lvl data)))
+				 (insert (concat "exp: " (number-to-string (truncate exp))
+						 " gp: " (number-to-string (truncate gp))
+						 " hp: " (number-to-string (truncate hp))
+						 " lvl: " (number-to-string (truncate lvl)))))))
+			 (cond ((or (string= type "reward") (string= type "store"))
+				(message "Purchased %s" id))
+			       ((string= direction "down")
+				(message "Health lost for habit %s" task))
+			       ((not (string= direction "up"))
+				(message "Experience gained!")))))
+   :error (cl-function (lambda (&key error-thrown &allow-other-keys)
 			 (message "HabitRPG: Error in completing [%s]" id)
-			 (setq hrpg-to-upvote-ids (cl-adjoin id hrpg-to-upvote-ids)))))))
+			 (setq hrpg-to-upvote-ids (cl-adjoin id hrpg-to-upvote-ids))))))
 
 
 (defun habitrpg-get-id-at-point ()
@@ -1764,14 +1765,14 @@ Continuously upvote habits associated with the currently clocking task, based on
     (save-excursion (save-window-excursion
 		      (with-current-buffer "*habitrpg:status*"
 			(setq header-line-format nil)))))
-  (lexical-let* ((tags (org-get-tags-at))
-		 (habit (car (intersection tags hrpg-tags-list :test 'equal)))
-		 (bad (unless (not hrpg-bad-tags-list)
-			(mapcar
-			 (lambda (tag)
-			   (assoc tag hrpg-bad-tags-list))
-			 tags)))
-		 (badhabit (car (remove nil bad))))
+  (let* ((tags (org-get-tags-at))
+	 (habit (car (intersection tags hrpg-tags-list :test 'equal)))
+	 (bad (unless (not hrpg-bad-tags-list)
+		(mapcar
+		 (lambda (tag)
+		   (assoc tag hrpg-bad-tags-list))
+		 tags)))
+	 (badhabit (car (remove nil bad))))
     (when tags
       (cond (habit
 	     (habitrpg-get-id habit
